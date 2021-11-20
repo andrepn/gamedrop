@@ -1,0 +1,18 @@
+from brownie import *
+
+def withdraw_gtt(account, amount):
+    base = {"from" : account}
+
+    balance_in_contract = RaffleContract[0].view_raw_balance(account)
+    balance_in_wallet = GamingTestToken[0].balanceOf(account)
+    print(f'Current staked balance of {account} is {balance_in_contract}')
+    print(f'Current wallet balance of {account} is {balance_in_wallet}')
+
+    RaffleContract[0].Withdraw(amount, base)
+
+    balance_in_contract = RaffleContract[0].view_raw_balance(account)
+    time_balance_in_contract = RaffleContract[0].view_time_weighted_balance(account)
+    balance_in_wallet = GamingTestToken[0].balanceOf(account)
+    print(f'New staked balance of {account} is {balance_in_contract}')
+    print(f'New time weighted balance of {account} is {time_balance_in_contract}')
+    print(f'New wallet balance of {account} is {balance_in_wallet}')
