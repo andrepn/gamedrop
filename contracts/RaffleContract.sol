@@ -163,13 +163,11 @@ contract RaffleContract is Ownable {
     emit raffleCompleted(block.timestamp, most_recent_raffle_winner, most_recent_prize);
   }
 
-  function updateGamedropVRFContract(IGVRF new_vrf_contract) public {
-    require(msg.sender == owner(), "sender not owner");
+  function updateGamedropVRFContract(IGVRF new_vrf_contract) public onlyOwner() {
     gamedrop_vrf_contract = new_vrf_contract;
   }
 
-  function addAddressToWhitelist(address whitelist_address) public  {
-    require(msg.sender == owner(), "sender not owner");
+  function addAddressToWhitelist(address whitelist_address) public onlyOwner()  {
     _address_whitelist[whitelist_address] = true;
     
     emit AddressWhitelist(whitelist_address);

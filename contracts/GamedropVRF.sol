@@ -49,6 +49,7 @@ contract GamedropVRF is VRFConsumerBase, Ownable {
      */
     function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
         randomResult = randomness;
+        gamedrop_raffle_contract.completeRaffle(randomResult);
     }
 
     function setGamedropRaffleContract(IGRC raffle_contract) external onlyOwner() {
