@@ -124,10 +124,10 @@ contract RaffleContract is Ownable {
   }
 
   modifier prizeUnclaimed() {
-    //check if still in NFT vault
+    n = 1; // filler code, check if prize still in vault
   }
 
-  function claimPrize () external isWinner prizeUnclaimed {
+  function claimPrize () external isWinner() prizeUnclaimed() {
     _sendNFTFromVault(most_recent_prize.nft_contract, most_recent_prize.token_id, msg.sender);
   }
 
@@ -141,7 +141,7 @@ contract RaffleContract is Ownable {
     emit NFTsent(nft_recipient, nft_contract_address, token_id);
   }
 
-  function initiateRaffle() public {
+  function initiateRaffle() external {
     require(gamedrop_vrf_contract.getContractLinkBalance() >= gamedrop_vrf_contract.fee(), "not enough LINK in target contract");
     
     current_random_request_id = gamedrop_vrf_contract.requestRandomness();
@@ -152,12 +152,13 @@ contract RaffleContract is Ownable {
   function completeRaffle(uint random_number) external {
     require(msg.sender == gamedrop_vrf_contract, "request not coming from vrf_contract");
     
+    //TODO: move this tracking to the VRF contract
     vrf_request_to_result[current_random_request_id] = random_number;
     
     //updating these two variables makes the prize claimable by the owner
 
-    most_recent_raffle_winner = _chooseWinner(random_number);
-    most_recent_prize = _chooseNFT(random_number)
+    //most_recent_raffle_winner = _chooseWinner(random_number);
+    //most_recent_prize = _chooseNFT(random_number)
 
     emit raffleCompleted(block.timestamp, most_recent_raffle_winner, most_recent_prize);
   }
