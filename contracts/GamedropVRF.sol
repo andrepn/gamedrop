@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "./IGRC.sol";
 
-contract GamedropVRF is VRFConsumerBase {
+contract GamedropVRF is VRFConsumerBase, Ownable {
     
     bytes32 internal keyHash;
     uint256 internal fee;
     
     uint256 public randomResult;
     IERC20 public link;
+    IGRC public gamedrop_raffle_contract;
     
     /**
      * Constructor inherits VRFConsumerBase
@@ -46,6 +49,10 @@ contract GamedropVRF is VRFConsumerBase {
      */
     function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
         randomResult = randomness;
+    }
+
+    function setGamedropRaffleContract(IGRC raffle_contract) external onlyOwner() {
+        gamedrop_raffle_contract = raffle_contract;
     }
 
     function getContractLinkBalance() external view returns (uint) {
