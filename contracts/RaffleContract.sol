@@ -23,7 +23,7 @@ contract RaffleContract is Ownable {
   uint time_between_raffles = 604800;
   NFT[] vaultedNFTs;
 
-  uint current_random_request_id;
+  bytes32 current_random_request_id;
   address most_recent_raffle_winner;
   NFT most_recent_prize;
 
@@ -31,7 +31,7 @@ contract RaffleContract is Ownable {
   mapping(address => uint) public time_weighted_balances;
   mapping(address => bool) private _address_whitelist;
   mapping(IERC721 => bool) private _nft_whitelist;
-  mapping(uint => uint) public vrf_request_to_result;
+  mapping(bytes32 => uint) public vrf_request_to_result;
 
   event depositMade(address sender, uint amount, uint total_token_entered);
   event withdrawMade(address sender, uint amount, uint total_token_entered);
@@ -107,24 +107,24 @@ contract RaffleContract is Ownable {
     // here we need to request and send approval to transfer token
     nft_contract.transferFrom(msg.sender, address(this), token_id);
 
-    NFT new_nft = NFT(nft_contract, token_id);
-
-    vaultedNFTs.push(new_nft); //FIX THIS IT DOESNT MAKE SENSE
+    //TODO: add way to track whcih nfts in vault
 
     emit NFTVaulted(msg.sender, nft_contract_address, token_id);
 
   }
 
   function fakeRaffleWinner(address winner, IERC721 nft_contract_address, uint token_id) public {
-    sendNFTFromVault(nft_contract_address, token_id, winner);
+    _sendNFTFromVault(nft_contract_address, token_id, winner);
   }
 
   modifier isWinner() {
-    require(msg.sender == most_recent_raffle_winner)
+    require(msg.sender == most_recent_raffle_winner);
+    _;
   }
 
   modifier prizeUnclaimed() {
-    n = 1; // filler code, check if prize still in vault
+    uint n = 1; // filler code, check if prize still in vault
+    _;
   }
 
   function claimPrize () external isWinner() prizeUnclaimed() {
@@ -142,15 +142,15 @@ contract RaffleContract is Ownable {
   }
 
   function initiateRaffle() external {
-    require(gamedrop_vrf_contract.getContractLinkBalance() >= gamedrop_vrf_contract.fee(), "not enough LINK in target contract");
+    require(gamedrop_vrf_contract.getContractLinkBalance() >= .1 * 10 ** 10 , "not enough LINK in target contract"); //LINK FEE
     
-    current_random_request_id = gamedrop_vrf_contract.requestRandomness();
+    current_random_request_id = gamedrop_vrf_contract.getRandomNumber();
 
-    emit raffleInitiated(block.timestamp, current_random_request_id, msg.sender)
+    emit raffleInitiated(block.timestamp, current_random_request_id, msg.sender);
   }
 
   function completeRaffle(uint random_number) external {
-    require(msg.sender == gamedrop_vrf_contract, "request not coming from vrf_contract");
+    require(msg.sender == address(gamedrop_vrf_contract), "request not coming from vrf_contract");
     
     //TODO: move this tracking to the VRF contract
     vrf_request_to_result[current_random_request_id] = random_number;
