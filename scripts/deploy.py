@@ -8,6 +8,7 @@ def deploy_contracts():
     cnft = CoolNFTs.deploy("Cool_NFT", "CNFT", base_account)
     rc = RaffleContract.deploy(GamingTestToken[0].address, base_account)
 
+'''
     for account in accounts:
         gtt.transfer(account, 100000, base_account)
 
@@ -22,4 +23,8 @@ def deploy_contracts():
 
     print("send NFT with token_id 4 to vault")
     rc.vaultNFT(CoolNFTs[0].address, 4, base_account)
+'''
+
+def main():
+    deploy_contracts()
 

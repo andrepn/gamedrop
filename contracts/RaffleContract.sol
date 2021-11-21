@@ -4,7 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC721.sol";
-import "./IGVRF.sol";
+import "../interfaces/IGVRF.sol";
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
 
 contract RaffleContract is Ownable {
@@ -23,6 +23,10 @@ contract RaffleContract is Ownable {
   uint time_between_raffles = 604800;
   NFT[] vaultedNFTs;
 
+  // variable for testing only
+  bool public raffle_complete = false;
+
+
   bytes32 current_random_request_id;
   address most_recent_raffle_winner;
   NFT most_recent_prize;
@@ -31,7 +35,6 @@ contract RaffleContract is Ownable {
   mapping(address => uint) public time_weighted_balances;
   mapping(address => bool) private _address_whitelist;
   mapping(IERC721 => bool) private _nft_whitelist;
-  mapping(bytes32 => uint) public vrf_request_to_result;
 
   event depositMade(address sender, uint amount, uint total_token_entered);
   event withdrawMade(address sender, uint amount, uint total_token_entered);
@@ -141,35 +144,37 @@ contract RaffleContract is Ownable {
     emit NFTsent(nft_recipient, nft_contract_address, token_id);
   }
 
-  function initiateRaffle() external {
-    require(gamedrop_vrf_contract.getContractLinkBalance() >= .1 * 10 ** 10 , "not enough LINK in target contract"); //LINK FEE
-    
+  function initiateRaffle() external returns (bytes32) {
+    raffle_complete = false;
+
     current_random_request_id = gamedrop_vrf_contract.getRandomNumber();
 
     emit raffleInitiated(block.timestamp, current_random_request_id, msg.sender);
+
+    return current_random_request_id;
   }
 
-  function completeRaffle(uint random_number) external {
-    require(msg.sender == address(gamedrop_vrf_contract), "request not coming from vrf_contract");
-    
-    //TODO: move this tracking to the VRF contract
-    vrf_request_to_result[current_random_request_id] = random_number;
+  function completeRaffle(uint random_number) external returns (bool) {
+    //require(msg.sender == address(gamedrop_vrf_contract), "request not coming from vrf_contract");
     
     //updating these two variables makes the prize claimable by the owner
 
     //most_recent_raffle_winner = _chooseWinner(random_number);
     //most_recent_prize = _chooseNFT(random_number)
 
+    //temporary for testing
+    raffle_complete = true;
+
     emit raffleCompleted(block.timestamp, most_recent_raffle_winner, most_recent_prize);
+
+    return raffle_complete;
   }
 
-  function updateGamedropVRFContract(IGVRF new_vrf_contract) public {
-    require(msg.sender == owner(), "sender not owner");
+  function updateGamedropVRFContract(IGVRF new_vrf_contract) public onlyOwner() {
     gamedrop_vrf_contract = new_vrf_contract;
   }
 
-  function addAddressToWhitelist(address whitelist_address) public  {
-    require(msg.sender == owner(), "sender not owner");
+  function addAddressToWhitelist(address whitelist_address) public onlyOwner()  {
     _address_whitelist[whitelist_address] = true;
     
     emit AddressWhitelist(whitelist_address);
