@@ -14,6 +14,4 @@ def main():
         trio.sleep(2)
         random_number = GamedropVRF[-1].veiwRandomResponse()
 
-    result = RaffleContract[-1].completeRaffle(random_number, base)
-
-    print(result)
+    RaffleContract[-1].completeRaffle(random_number, base)

@@ -39,8 +39,8 @@ contract RaffleContract is Ownable {
   bytes32 current_random_request_id;
 
   //variables for claimable prize
-  address most_recent_raffle_winner;
-  NFT most_recent_prize;
+  address public most_recent_raffle_winner;
+  NFT public most_recent_prize;
 
   //array for owned NFTs
   NFT[] public vaultedNFTs;
@@ -55,7 +55,6 @@ contract RaffleContract is Ownable {
 
   //token and time weighted balances
   mapping(address => uint) public raw_balances;
-  mapping(address => uint) public time_weighted_balances;
 
   //whitelists
   mapping(address => bool) private _address_whitelist;
@@ -296,10 +295,6 @@ contract RaffleContract is Ownable {
     return raw_balances[wallet_address];
   }
 
-  function view_time_weighted_balance(address wallet_address) public view returns (uint) {
-    return time_weighted_balances[wallet_address];
-  }
-
   function is_address_whitelisted(address wallet_address) public view returns (bool) {
     return _address_whitelist[wallet_address];
   }
@@ -310,5 +305,13 @@ contract RaffleContract is Ownable {
 
   function view_odds_of_winning(address user) public view returns (uint) {
     return sortition_sum_trees.stakeOf(TREE_KEY, bytes32(uint256(uint160(user)) << 96));
+  }
+
+  function get_total_number_of_NFTS() public view returns (uint) {
+    return vaultedNFTs.length;
+  }
+
+  function check_if_NFT_in_vault(IERC721 nft_contract, uint token_id) public view returns (bool) {
+    return is_NFT_in_vault[nft_contract][token_id];
   }
 }
