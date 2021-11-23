@@ -40,6 +40,8 @@ compiler:
         remappings: 
             - '@chainlink=smartcontractkit/chainlink-brownie-contracts@0.2.2'
             - '@openzeppelin=OpenZeppelin/openzeppelin-contracts@4.3.3'
+            - '@pooltogether_uniform_random=pooltogether/uniform-random-number@1.0.0'
+            - '@pooltogether_sortition_sum_tree=pooltogether/sortition-sum-tree-factory@0.1.0'
     vyper:
         version: null
 

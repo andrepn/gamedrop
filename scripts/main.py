@@ -4,9 +4,9 @@ from .deposit_gtt import deposit_gtt
 from .withdraw_gtt import withdraw_gtt
 
 def main():
-    deploy_contracts()
+    #deploy_contracts()
     
     for account in accounts:
         deposit_gtt(account, 1000)
 
-    withdraw_gtt(accounts[0], 500)
+    #withdraw_gtt(accounts[0], 500)

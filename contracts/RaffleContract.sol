@@ -4,35 +4,59 @@ pragma solidity >=0.8.0 <0.9.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC721.sol";
+import "@pooltogether_uniform_random/contracts/UniformRandomNumber.sol";
+import "@pooltogether_sortition_sum_tree/contracts/SortitionSumTreeFactory.sol";
 import "../interfaces/IGVRF.sol";
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
 
 contract RaffleContract is Ownable {
+  //libraries
+  using SortitionSumTreeFactory for SortitionSumTreeFactory.SortitionSumTrees;
 
+  //constansts and variables for sortition
+  bytes32 constant private TREE_KEY = keccak256("Gamedrop/Raffle");
+  uint256 constant private MAX_TREE_LEAVES = 5; //chose this constant to balance cost of read vs write. Could be optimized with data
+  SortitionSumTreeFactory.SortitionSumTrees internal sortition_sum_trees;
+
+  //structs
   struct NFT {
     IERC721 nft_contract;
     uint token_id;
   }
+  struct NextEpochBalanceUpdate{
+    address user;
+    uint new_balance;
+  }
   
+  //contract interfaces
   IERC20 public gaming_test_token;
   IGVRF public gamedrop_vrf_contract;
 
+  //variables for raffle
   uint total_token_entered;
   uint total_time_weighted_balance;
   uint last_raffle_time;
-  uint time_between_raffles = 604800;
-  NFT[] vaultedNFTs;
-
-  // variable for testing only
-  bool public raffle_complete = false;
-
-
   bytes32 current_random_request_id;
-  address most_recent_raffle_winner;
-  NFT most_recent_prize;
 
+  //variables for claimable prize
+  address public most_recent_raffle_winner;
+  NFT public most_recent_prize;
+
+  //array for owned NFTs
+  NFT[] public vaultedNFTs;
+  mapping(IERC721 => mapping(uint => bool)) is_NFT_in_vault;
+  mapping(IERC721 => mapping(uint => uint)) index_of_nft_in_array;
+
+  //array to hold instructions for updating balances post raffle and mappings
+  address[] next_epoch_balance_instructions;
+  mapping(address => bool) is_user_already_in_next_epoch_array;
+  mapping(address => uint) user_to_old_balance;
+  mapping(address => uint) user_to_new_balance;
+
+  //token and time weighted balances
   mapping(address => uint) public raw_balances;
-  mapping(address => uint) public time_weighted_balances;
+
+  //whitelists
   mapping(address => bool) private _address_whitelist;
   mapping(IERC721 => bool) private _nft_whitelist;
 
@@ -46,29 +70,66 @@ contract RaffleContract is Ownable {
   event raffleCompleted(uint time, address winner, NFT prize);
 
   constructor(address _deposit_token) {
+    //initiate countdown to raffle at deploy time
     last_raffle_time = block.timestamp;
+
+    //initialize total_token_entered at 0
     total_token_entered = 0;
+
+    //initialize ERC20 interface (in production this will be yield guild)
     gaming_test_token = IERC20(_deposit_token);
+
+    //initialize sortition_sum_trees
+    sortition_sum_trees.createTree(TREE_KEY, MAX_TREE_LEAVES);
   }
 
   modifier addRaffleBalance(uint amount) {
+    // declare time_between_raffles in memory in two functions to save gas
+    uint time_between_raffles = 604800;
     uint time_until_next_raffle = (time_between_raffles - (block.timestamp - last_raffle_time));
+    uint updated_balance = time_until_next_raffle * amount;
     
     raw_balances[msg.sender] += amount;
-    time_weighted_balances[msg.sender] += time_until_next_raffle * amount;
+    
+    // creates or updates node in sortition tree for time weighted odds of user
+    sortition_sum_trees.set(TREE_KEY, updated_balance, bytes32(uint256(uint160(msg.sender)) << 96));
 
     _;
+
+    uint next_balance = raw_balances[msg.sender] * time_between_raffles;
+
+    user_to_old_balance[msg.sender] = updated_balance;
+    user_to_new_balance[msg.sender] = next_balance;
+
+    if (is_user_already_in_next_epoch_array[msg.sender] == false) {
+      next_epoch_balance_instructions.push(msg.sender);
+    }
 
     total_time_weighted_balance += time_until_next_raffle * amount;
   }
 
   modifier subtractRaffleBalance(uint amount) {
+    // declare time_between_raffles in memory in two functions to save gas
+    uint time_between_raffles = 604800;
     uint time_until_next_raffle = (time_between_raffles - (block.timestamp - last_raffle_time));
+    uint updated_balance = time_until_next_raffle * amount;
 
     raw_balances[msg.sender] -= amount;
-    time_weighted_balances[msg.sender] -= time_until_next_raffle * amount;
+    
+    // creates node in sortition tree for time weighted odds of user
+    sortition_sum_trees.set(TREE_KEY, updated_balance, bytes32(uint256(uint160(msg.sender)) << 96));
 
     _;
+
+    uint next_balance = raw_balances[msg.sender] * time_between_raffles;
+
+    user_to_old_balance[msg.sender] = updated_balance;
+    user_to_new_balance[msg.sender] = next_balance;
+
+    //if user is not already in list then add them
+    if (is_user_already_in_next_epoch_array[msg.sender] == false) {
+      next_epoch_balance_instructions.push(msg.sender);
+    }
 
     total_time_weighted_balance -= time_until_next_raffle * amount;
   }
@@ -104,20 +165,21 @@ contract RaffleContract is Ownable {
     require(_address_whitelist[msg.sender], "Address not whitelisted to contribute NFTS, to whitelist your address reach out to Joe");
     require(_nft_whitelist[nft_contract_address], "This NFT type is not whitelisted currently, to add your NFT reach out to Joe");
 
-    // NOTE: could require that given address is actually NFTs but because of NFT whitelist would be redundant
-
     IERC721 nft_contract = nft_contract_address;
     // here we need to request and send approval to transfer token
     nft_contract.transferFrom(msg.sender, address(this), token_id);
 
-    //TODO: add way to track whcih nfts in vault
+    NFT memory new_nft = NFT({nft_contract: nft_contract, token_id: token_id});
+    vaultedNFTs.push(new_nft);
+    
+    //tracking
+    uint index = vaultedNFTs.length - 1;
+    is_NFT_in_vault[nft_contract][token_id] = true;
+    index_of_nft_in_array[nft_contract][token_id] = index;
+
 
     emit NFTVaulted(msg.sender, nft_contract_address, token_id);
 
-  }
-
-  function fakeRaffleWinner(address winner, IERC721 nft_contract_address, uint token_id) public {
-    _sendNFTFromVault(nft_contract_address, token_id, winner);
   }
 
   modifier isWinner() {
@@ -126,11 +188,21 @@ contract RaffleContract is Ownable {
   }
 
   modifier prizeUnclaimed() {
-    uint n = 1; // filler code, check if prize still in vault
+    require(is_NFT_in_vault[most_recent_prize.nft_contract][most_recent_prize.token_id], 'prize already claimed');
     _;
   }
 
-  function claimPrize () external isWinner() prizeUnclaimed() {
+  modifier removeNFTFromArray() {
+    _;
+    uint index = index_of_nft_in_array[most_recent_prize.nft_contract][most_recent_prize.token_id];
+    uint last_index = vaultedNFTs.length - 1;
+
+    vaultedNFTs[index] = vaultedNFTs[last_index];
+    vaultedNFTs.pop();
+    is_NFT_in_vault[most_recent_prize.nft_contract][most_recent_prize.token_id] = false;
+  }
+
+  function claimPrize () external isWinner() prizeUnclaimed() removeNFTFromArray() {
     _sendNFTFromVault(most_recent_prize.nft_contract, most_recent_prize.token_id, msg.sender);
   }
 
@@ -138,14 +210,13 @@ contract RaffleContract is Ownable {
   function _sendNFTFromVault(IERC721 nft_contract_address, uint token_id, address nft_recipient) internal {
     IERC721 nft_contract = nft_contract_address;
     nft_contract.approve(nft_recipient, token_id);
-
     nft_contract.transferFrom(address(this), nft_recipient, token_id);
 
     emit NFTsent(nft_recipient, nft_contract_address, token_id);
   }
 
   function initiateRaffle() external returns (bytes32) {
-    raffle_complete = false;
+    require(vaultedNFTs.length > 0, 'no NFTs to raffle');
 
     current_random_request_id = gamedrop_vrf_contract.getRandomNumber();
 
@@ -154,20 +225,53 @@ contract RaffleContract is Ownable {
     return current_random_request_id;
   }
 
-  function completeRaffle(uint random_number) external returns (bool) {
-    //require(msg.sender == address(gamedrop_vrf_contract), "request not coming from vrf_contract");
-    
-    //updating these two variables makes the prize claimable by the owner
+  modifier _updateBalancesAfterRaffle() {
+    _;
 
-    //most_recent_raffle_winner = _chooseWinner(random_number);
-    //most_recent_prize = _chooseNFT(random_number)
+    uint x;
 
-    //temporary for testing
-    raffle_complete = true;
+    for(x = 0; x < next_epoch_balance_instructions.length; x++) {
+      address user = next_epoch_balance_instructions[x];
+      uint next_balance = user_to_new_balance[user];
+
+      sortition_sum_trees.set(TREE_KEY, next_balance, bytes32(uint256(uint160(user)) << 96));
+
+      uint old_balance = user_to_old_balance[user];
+      total_time_weighted_balance += next_balance - old_balance;
+    }
+
+    delete next_epoch_balance_instructions;
+  }
+
+  function _chooseWinner(uint random_number) internal returns (address) {
+    //set range for the uniform random number
+    uint bound = total_time_weighted_balance;
+    address selected;
+
+    if (bound == 0) {
+      selected = address(0);
+    } else {
+      uint256 number = UniformRandomNumber.uniform(random_number, bound);
+      selected = address((uint160(uint256(sortition_sum_trees.draw(TREE_KEY, number)))));
+    }
+    return selected;
+  }
+
+  function _chooseNFT(uint random_number) internal returns (NFT memory) {
+    uint bound = vaultedNFTs.length;
+    uint index_of_nft;
+
+    index_of_nft  = UniformRandomNumber.uniform(random_number, bound);
+
+    return vaultedNFTs[index_of_nft];
+  }
+
+  function completeRaffle(uint random_number) external _updateBalancesAfterRaffle() {
+    //updating these two variables makes the prize claimable by the winner
+    most_recent_raffle_winner = _chooseWinner(random_number); 
+    most_recent_prize = _chooseNFT(random_number);
 
     emit raffleCompleted(block.timestamp, most_recent_raffle_winner, most_recent_prize);
-
-    return raffle_complete;
   }
 
   function updateGamedropVRFContract(IGVRF new_vrf_contract) public onlyOwner() {
@@ -191,10 +295,6 @@ contract RaffleContract is Ownable {
     return raw_balances[wallet_address];
   }
 
-  function view_time_weighted_balance(address wallet_address) public view returns (uint) {
-    return time_weighted_balances[wallet_address];
-  }
-
   function is_address_whitelisted(address wallet_address) public view returns (bool) {
     return _address_whitelist[wallet_address];
   }
@@ -203,7 +303,15 @@ contract RaffleContract is Ownable {
     return _nft_whitelist[nft_contract];
   }
 
-  function view_total_time_weighted_balance() public view returns (uint) {
-    return total_time_weighted_balance;
+  function view_odds_of_winning(address user) public view returns (uint) {
+    return sortition_sum_trees.stakeOf(TREE_KEY, bytes32(uint256(uint160(user)) << 96));
+  }
+
+  function get_total_number_of_NFTS() public view returns (uint) {
+    return vaultedNFTs.length;
+  }
+
+  function check_if_NFT_in_vault(IERC721 nft_contract, uint token_id) public view returns (bool) {
+    return is_NFT_in_vault[nft_contract][token_id];
   }
 }
