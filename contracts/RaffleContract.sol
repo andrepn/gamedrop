@@ -166,13 +166,18 @@ contract RaffleContract is Ownable {
     require(_address_whitelist[msg.sender], "Address not whitelisted to contribute NFTS, to whitelist your address reach out to Joe");
     require(_nft_whitelist[nft_contract_address], "This NFT type is not whitelisted currently, to add your NFT reach out to Joe");
 
-    // NOTE: could require that given address is actually NFTs but because of NFT whitelist would be redundant
-
     IERC721 nft_contract = nft_contract_address;
     // here we need to request and send approval to transfer token
     nft_contract.transferFrom(msg.sender, address(this), token_id);
 
-    //TODO: add way to track whcih nfts in vault
+    NFT memory new_nft = NFT({nft_contract: nft_contract, token_id: token_id});
+    vaultedNFTs.push(new_nft);
+    
+    //tracking
+    uint index = vaultedNFTs.length - 1;
+    is_NFT_in_vault[nft_contract][token_id] = true;
+    index_of_nft_in_array[nft_contract][token_id] = index;
+
 
     emit NFTVaulted(msg.sender, nft_contract_address, token_id);
 
