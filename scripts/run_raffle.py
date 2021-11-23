@@ -1,6 +1,7 @@
 from brownie import *
 import trio
 
+#Initiate raffle look from raffle contract and this script auto complets
 def main():
 
     base = {'from' : accounts[0]}
