@@ -7,6 +7,10 @@ import "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "../interfaces/IGRC.sol";
 
+/*
+CONTRACT FOR INTERACTING WITH CL VRF
+*/
+
 contract GamedropVRF is VRFConsumerBase, Ownable {
     
     bytes32 internal keyHash;

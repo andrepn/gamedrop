@@ -3,6 +3,11 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
+/*
+CONTRACT FOR GENERATING SAMPLE NFTS FOR TESTING
+*/
+
+
 contract CoolNFTs is ERC721 {
 
     event NFT_Minted(uint token_id, address receiver, uint total_minted_tokens);

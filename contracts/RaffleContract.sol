@@ -9,6 +9,17 @@ import "@pooltogether_sortition_sum_tree/contracts/SortitionSumTreeFactory.sol";
 import "../interfaces/IGVRF.sol";
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
 
+/*TODO:
+upgrade to safemath
+upgrade to upgradeable
+*/
+
+
+
+/*
+CONTRACT GAMEDROP RAFFLE
+*/
+
 contract RaffleContract is Ownable {
   //libraries
   using SortitionSumTreeFactory for SortitionSumTreeFactory.SortitionSumTrees;
@@ -92,7 +103,7 @@ contract RaffleContract is Ownable {
     raw_balances[msg.sender] += amount;
     
     // creates or updates node in sortition tree for time weighted odds of user
-    sortition_sum_trees.set(TREE_KEY, updated_balance, bytes32(uint256(uint160(msg.sender)) << 96));
+    sortition_sum_trees.set(TREE_KEY, updated_balance, bytes32(uint256(uint160(msg.sender))));
 
     _;
 
@@ -117,7 +128,7 @@ contract RaffleContract is Ownable {
     raw_balances[msg.sender] -= amount;
     
     // creates node in sortition tree for time weighted odds of user
-    sortition_sum_trees.set(TREE_KEY, updated_balance, bytes32(uint256(uint160(msg.sender)) << 96));
+    sortition_sum_trees.set(TREE_KEY, updated_balance, bytes32(uint256(uint160(msg.sender))));
 
     _;
 
@@ -234,7 +245,7 @@ contract RaffleContract is Ownable {
       address user = next_epoch_balance_instructions[x];
       uint next_balance = user_to_new_balance[user];
 
-      sortition_sum_trees.set(TREE_KEY, next_balance, bytes32(uint256(uint160(user)) << 96));
+      sortition_sum_trees.set(TREE_KEY, next_balance, bytes32(uint256(uint160(user))));
 
       uint old_balance = user_to_old_balance[user];
       total_time_weighted_balance += next_balance - old_balance;
@@ -304,7 +315,7 @@ contract RaffleContract is Ownable {
   }
 
   function view_odds_of_winning(address user) public view returns (uint) {
-    return sortition_sum_trees.stakeOf(TREE_KEY, bytes32(uint256(uint160(user)) << 96));
+    return sortition_sum_trees.stakeOf(TREE_KEY, bytes32(uint256(uint160(user))));
   }
 
   function get_total_number_of_NFTS() public view returns (uint) {
