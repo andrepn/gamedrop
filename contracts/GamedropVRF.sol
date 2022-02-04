@@ -12,34 +12,41 @@ CONTRACT FOR INTERACTING WITH CL VRF
 */
 
 contract GamedropVRF is VRFConsumerBase, Ownable {
-    
     bytes32 internal keyHash;
     uint256 internal fee;
-    
+
     uint256 public randomResult;
     bytes32 internal currentRequestID;
     mapping(bytes32 => uint256) public requestIdToRandomNumber;
 
     IERC20 public link;
     IGRC public gamedrop_raffle_contract;
-    
-    constructor(bytes32 _keyhash, address _vrfCoordinator, address _linkToken, IERC20 _link_interface) 
+
+    constructor(
+        bytes32 _keyhash,
+        address _vrfCoordinator,
+        address _linkToken,
+        IERC20 _link_interface
+    )
         VRFConsumerBase(
             _vrfCoordinator, // VRF Coordinator
-            _linkToken  // LINK Token
-        ) 
+            _linkToken // LINK Token
+        )
     {
         keyHash = _keyhash;
-        fee = 0.1 * 10 ** 18; // 0.1 LINK
+        fee = 2 * 10**18; // 0.1 LINK for testnet and 2 LINK for mainnet
         // fee = _fee;;
         link = _link_interface;
     }
-    
-    /** 
+
+    /**
      * Requests randomness
      */
     function getRandomNumber() external returns (bytes32 requestId) {
-        require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK - fill contract with faucet");
+        require(
+            LINK.balanceOf(address(this)) >= fee,
+            "Not enough LINK - fill contract with faucet"
+        );
         currentRequestID = requestRandomness(keyHash, fee);
         return currentRequestID;
     }
@@ -47,23 +54,29 @@ contract GamedropVRF is VRFConsumerBase, Ownable {
     /**
      * Callback function used by VRF Coordinator
      */
-    function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
+    function fulfillRandomness(bytes32 requestId, uint256 randomness)
+        internal
+        override
+    {
         requestIdToRandomNumber[requestId] = randomness;
     }
 
-    function setGamedropRaffleContract(IGRC raffle_contract) external onlyOwner() {
+    function setGamedropRaffleContract(IGRC raffle_contract)
+        external
+        onlyOwner
+    {
         gamedrop_raffle_contract = raffle_contract;
     }
 
-    function getContractLinkBalance() external view returns (uint) {
+    function getContractLinkBalance() external view returns (uint256) {
         return link.balanceOf(address(this));
     }
 
-    function getContractBalance() external view returns (uint) {
+    function getContractBalance() external view returns (uint256) {
         return address(this).balance;
     }
 
-    function veiwRandomResponse() external view returns (uint) {
+    function veiwRandomResponse() external view returns (uint256) {
         return requestIdToRandomNumber[currentRequestID];
     }
 }
