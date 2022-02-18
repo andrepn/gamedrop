@@ -12,3 +12,7 @@ def load_accounts():
     list_of_accounts.append(accounts.add(key))
 
     return list_of_accounts
+
+
+def main():
+    load_accounts()
